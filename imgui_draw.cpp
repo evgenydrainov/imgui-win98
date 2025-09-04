@@ -454,7 +454,8 @@ void ImGui::StyleWin98(ImGuiStyle* dst)
     // In retrorespect I should have used an icon map like FONT_ATLAS_DEFAULT_TEX_DATA_PIXELS
     unsigned char minimize[] = {86,6,6,6,0};
     unsigned char close[] = {14,2,4,2,5,2,2,2,7,4,9,2,9,4,7,2,2,2,5,2,4,2,0};
-    unsigned char *run_length[] = {close, minimize};
+    unsigned char maximize[] = {1,9,3,9,3,1,7,1,3,1,7,1,3,1,7,1,3,1,7,1,3,1,7,1,3,1,7,1,3,9,0};
+    unsigned char *run_length[] = {close, minimize, maximize};
 
     int rect_ids[IM_ARRAYSIZE(run_length)];
     for (int i = 0; i < IM_ARRAYSIZE(run_length); i++) {

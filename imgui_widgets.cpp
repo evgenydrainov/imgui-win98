@@ -918,6 +918,47 @@ bool ImGui::CollapseButton(ImGuiID id, const ImVec2& pos)
     return pressed;
 }
 
+bool ImGui::MaximizeButton(ImGuiID id, const ImVec2& pos)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiWindow* window = g.CurrentWindow;
+
+#ifdef WIN98 // maximize button size
+    ImRect bb(pos, pos + ImVec2(16.0f, 14.0f));
+#else
+    ImRect bb(pos, pos + ImVec2(g.FontSize, g.FontSize));
+#endif
+    bool is_clipped = !ItemAdd(bb, id);
+    bool hovered, held;
+    bool pressed = ButtonBehavior(bb, id, &hovered, &held, ImGuiButtonFlags_None);
+    if (is_clipped)
+        return pressed;
+
+    // Render
+    ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+    ImU32 text_col = GetColorU32(ImGuiCol_Text);
+#ifdef WIN98 // maximize button
+    IM_UNUSED(bg_col);
+    IM_UNUSED(text_col);
+    const ImU32 fill_col = GetColorU32(ImGuiCol_WindowBg);
+    window->DrawList->AddRectFilled(bb.Min, bb.Max, fill_col, 0.0f);
+    WinAddRect(bb.Min, bb.Max, hovered && held);
+
+    // maximize icon
+    RenderText(bb.Min + ImVec2(2.0f, 2.0f), "\xC3\x99");
+#else
+    if (hovered || held)
+        window->DrawList->AddCircleFilled(bb.GetCenter() + ImVec2(0.0f, -0.5f), g.FontSize * 0.5f + 1.0f, bg_col);
+    RenderArrow(window->DrawList, bb.Min, text_col, window->Collapsed ? ImGuiDir_Right : ImGuiDir_Down, 1.0f);
+#endif
+
+    // Switch to moving the window after mouse is moved beyond the initial drag threshold
+    if (IsItemActive() && IsMouseDragging(0))
+        StartMouseMovingWindow(window);
+
+    return pressed;
+}
+
 ImGuiID ImGui::GetWindowScrollbarID(ImGuiWindow* window, ImGuiAxis axis)
 {
     return window->GetID(axis == ImGuiAxis_X ? "#SCROLLX" : "#SCROLLY");

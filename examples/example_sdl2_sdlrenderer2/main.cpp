@@ -14,15 +14,78 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 #include <stdio.h>
-#include <SDL.h>
+#include <stdlib.h>
+#include "SDL.h"
+#include "SDL_syswm.h"
 
 #if !SDL_VERSION_ATLEAST(2,0,17)
 #error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
 #endif
 
+static SDL_HitTestResult WindowHitTest(SDL_Window *window, const SDL_Point *area, void *data)
+{
+    int w, h;
+    SDL_GetWindowSize(window, &w, &h);
+
+    // printf("HIT TEST %d %d\n", area->x, area->y);
+
+    int border = 6;
+
+    if (area->x < border && area->y < border)
+        return SDL_HITTEST_RESIZE_TOPLEFT;
+    if (area->x >= w - border && area->y < border)
+        return SDL_HITTEST_RESIZE_TOPRIGHT;
+    if (area->x >= w - border && area->y >= h - border)
+        return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
+    if (area->x < border && area->y >= h - border)
+        return SDL_HITTEST_RESIZE_BOTTOMLEFT;
+
+    if (area->x < border)
+        return SDL_HITTEST_RESIZE_LEFT;
+    if (area->x >= w - border)
+        return SDL_HITTEST_RESIZE_RIGHT;
+    if (area->y < border)
+        return SDL_HITTEST_RESIZE_TOP;
+    if (area->y >= h - border)
+        return SDL_HITTEST_RESIZE_BOTTOM;
+
+    if (area->y < 22)
+    {
+        SDL_Rect close_button    = {w-20-1, 4-1, 16+2, 14+2};
+        SDL_Rect maximize_button = {w-40-1, 4-1, 16+2, 14+2};
+        SDL_Rect minimize_button = {w-60-1, 4-1, 16+2, 14+2};
+
+        if (SDL_PointInRect(area, &close_button))
+        {
+            return SDL_HITTEST_NORMAL;
+        }
+
+        if (SDL_PointInRect(area, &maximize_button))
+        {
+            return SDL_HITTEST_NORMAL;
+        }
+
+        if (SDL_PointInRect(area, &minimize_button))
+        {
+            return SDL_HITTEST_NORMAL;
+        }
+
+        return SDL_HITTEST_DRAGGABLE;
+    }
+
+    return SDL_HITTEST_NORMAL;
+}
+
+bool g_CollapsePressed;
+bool g_MaximizePressed;
+
 // Main code
 int main(int, char**)
 {
+    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
+
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+
     // Setup SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
@@ -35,14 +98,33 @@ int main(int, char**)
     SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 #endif
 
+    SDL_SetHint("SDL_BORDERLESS_WINDOWED_STYLE", "1");
+    SDL_SetHint("SDL_BORDERLESS_RESIZABLE_STYLE", "1");
+
     // Create window with SDL_Renderer graphics context
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_Window* window = SDL_CreateWindow("Dear ImGui SDL2+SDL_Renderer example", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE
+                                                     | SDL_WINDOW_ALLOW_HIGHDPI
+                                                     | SDL_WINDOW_BORDERLESS);
+    SDL_Window* window = SDL_CreateWindow("Dear ImGui SDL2+SDL_Renderer example", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, window_flags);
     if (window == nullptr)
     {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
         return -1;
     }
+
+    SDL_SetWindowHitTest(window, WindowHitTest, nullptr);
+    SDL_SetWindowResizable(window, SDL_TRUE);
+
+    /*SDL_SysWMinfo info;
+    SDL_GetWindowWMInfo(window, &info);
+
+    SDL_ShowWindow(window);
+
+    ::SetWindowPos(info.info.win.window, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+
+    ::ShowWindow(info.info.win.window, SW_SHOWDEFAULT);
+    ::UpdateWindow(info.info.win.window);*/
+
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     if (renderer == nullptr)
     {
@@ -85,8 +167,8 @@ int main(int, char**)
     //IM_ASSERT(font != nullptr);
 
     // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
+    bool show_demo_window = false;
+    bool show_main_window = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -117,38 +199,15 @@ int main(int, char**)
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
 
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        ImGuiWindowFlags main_window_flags = (ImGuiWindowFlags_NoResize
+                                              | ImGuiWindowFlags_NoCollapse);
+
+        ImGui::SetNextWindowPos({});
+        ImGui::SetNextWindowSize(io.DisplaySize);
+        ImGui::Begin("Main Window###MAIN_WINDOW", &show_main_window, main_window_flags);
         {
-            static float f = 0.0f;
-            static int counter = 0;
-
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
-
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
         }
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
+        ImGui::End();
 
         // Rendering
         ImGui::Render();
@@ -157,6 +216,28 @@ int main(int, char**)
         SDL_RenderClear(renderer);
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
+        // printf("%d RENDERING\n", rand());
+
+        if (!show_main_window)
+            done = true;
+
+        if (g_CollapsePressed)
+        {
+            // printf("COLLAPSE\n");
+            SDL_MinimizeWindow(window);
+            g_CollapsePressed = false;
+        }
+
+        if (g_MaximizePressed)
+        {
+            // printf("MAXIMIZE\n");
+            if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) {
+                SDL_RestoreWindow(window);
+            } else {
+                SDL_MaximizeWindow(window);
+            }
+            g_MaximizePressed = false;
+        }
     }
 
     // Cleanup

@@ -6372,6 +6372,9 @@ void ImGui::RenderWindowDecorations(ImGuiWindow* window, const ImRect& title_bar
     }
 }
 
+extern bool g_CollapsePressed;
+extern bool g_MaximizePressed;
+
 // Render title text, collapse button, close button
 void ImGui::RenderWindowTitleBarContents(ImGuiWindow* window, const ImRect& title_bar_rect, const char* name, bool* p_open)
 {
@@ -6380,7 +6383,14 @@ void ImGui::RenderWindowTitleBarContents(ImGuiWindow* window, const ImRect& titl
     ImGuiWindowFlags flags = window->Flags;
 
     const bool has_close_button = (p_open != NULL);
-    const bool has_collapse_button = !(flags & ImGuiWindowFlags_NoCollapse) && (style.WindowMenuButtonPosition != ImGuiDir_None);
+    bool has_collapse_button = !(flags & ImGuiWindowFlags_NoCollapse) && (style.WindowMenuButtonPosition != ImGuiDir_None);
+    bool has_maximize_button = true;
+
+    if (window->ID == ImHashStr("###MAIN_WINDOW"))
+    {
+        has_collapse_button = true;
+        has_maximize_button = true;
+    }
 
     // Close & Collapse button are on the Menu NavLayer and don't default focus (unless there's nothing else on that layer)
     // FIXME-NAV: Might want (or not?) to set the equivalent of ImGuiButtonFlags_NoNavFocus so that mouse clicks on standard title bar items don't necessarily set nav/keyboard ref?
@@ -6400,10 +6410,20 @@ void ImGui::RenderWindowTitleBarContents(ImGuiWindow* window, const ImRect& titl
 #endif
     ImVec2 close_button_pos;
     ImVec2 collapse_button_pos;
+    ImVec2 maximize_button_pos;
     if (has_close_button)
     {
         close_button_pos = ImVec2(title_bar_rect.Max.x - pad_r - button_sz, title_bar_rect.Min.y + style.FramePadding.y);
         pad_r += button_sz + style.ItemInnerSpacing.x;
+    }
+    if (has_maximize_button && style.WindowMenuButtonPosition == ImGuiDir_Right)
+    {
+        maximize_button_pos = ImVec2(title_bar_rect.Max.x - pad_r - button_sz, title_bar_rect.Min.y + style.FramePadding.y);
+        pad_r += button_sz + style.ItemInnerSpacing.x;
+    }
+    if (has_collapse_button && style.WindowMenuButtonPosition == ImGuiDir_Left)
+    {
+        IM_ASSERT(!"TODO");
     }
     if (has_collapse_button && style.WindowMenuButtonPosition == ImGuiDir_Right)
     {
@@ -6420,6 +6440,7 @@ void ImGui::RenderWindowTitleBarContents(ImGuiWindow* window, const ImRect& titl
 
     close_button_pos += ImVec2(-2.0f, -2.0f);
     collapse_button_pos += ImVec2(-2.0f, -2.0f);
+    maximize_button_pos += ImVec2(-2.0f, -2.0f);
 
     ImU32 col_left = IM_COL32(128,128,128,255);
     ImU32 col_right = IM_COL32(181,181,181,255);
@@ -6451,7 +6472,15 @@ void ImGui::RenderWindowTitleBarContents(ImGuiWindow* window, const ImRect& titl
     // Collapse button (submitting first so it gets priority when choosing a navigation init fallback)
     if (has_collapse_button)
         if (CollapseButton(window->GetID("#COLLAPSE"), collapse_button_pos))
+        {
             window->WantCollapseToggle = true; // Defer actual collapsing to next frame as we are too far in the Begin() function
+            g_CollapsePressed = true;
+        }
+
+    // Maximize button
+    if (has_maximize_button)
+        if (MaximizeButton(window->GetID("#MAXIMIZE"), maximize_button_pos))
+            g_MaximizePressed = true;
 
     // Close button
     if (has_close_button)
